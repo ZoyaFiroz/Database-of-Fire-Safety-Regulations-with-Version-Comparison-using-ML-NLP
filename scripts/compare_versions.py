@@ -29,7 +29,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--old", type=int, required=True, help="old version_id")
     parser.add_argument("--new", type=int, required=True, help="new version_id")
-    parser.add_argument("--method", choices=["baseline", "sbert"], default="baseline")
+    parser.add_argument("--method", choices=["baseline", "sbert", "multilingual"], default="baseline")
     parser.add_argument("--only", choices=["added", "removed", "modified", "unchanged"], default=None,
                          help="filter output to one change type")
     args = parser.parse_args()

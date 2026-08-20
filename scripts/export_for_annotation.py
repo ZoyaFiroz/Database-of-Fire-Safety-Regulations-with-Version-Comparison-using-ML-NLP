@@ -29,7 +29,7 @@ def main():
     parser.add_argument("--old", type=int, required=True)
     parser.add_argument("--new", type=int, required=True)
     parser.add_argument("--out", required=True)
-    parser.add_argument("--method", choices=["baseline", "sbert"], default="baseline")
+    parser.add_argument("--method", choices=["baseline", "sbert", "multilingual"], default="baseline")
     args = parser.parse_args()
 
     engine = create_engine(DATABASE_URL)

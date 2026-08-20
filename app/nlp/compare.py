@@ -9,17 +9,25 @@ Two selectable methods, both implementing the same staged approach:
     Stage 2: for unmatched clauses (renumbering), align via TF-IDF cosine
              similarity.
 
-  method="sbert" (Stage 3 - new):
+  method="sbert" (Stage 3):
     Stage 1: match by identical clause_number, classify via sentence-
              embedding cosine similarity instead of difflib. This is the
              important change - it also fixes same-numbered pairs with
              subtle wording edits (e.g. clause 11.5's ", 2" insertion),
              which the baseline's Stage 2 (TF-IDF renumber-matching) never
              touches, because same-numbered pairs never reach Stage 2.
+             Uses all-MiniLM-L6-v2 (English).
     Stage 2: for unmatched clauses, align via semantic similarity instead
              of TF-IDF.
 
-  Both methods share the "added"/"removed" fallback logic in
+  method="multilingual" (Stage 3, cross-language):
+    Identical staged approach to "sbert", but uses a multilingual sentence
+    embedding model (paraphrase-multilingual-MiniLM-L12-v2) so the old and
+    new versions don't need to be in the same language - e.g. comparing a
+    German edition against an English one. No translation step: both
+    languages are embedded into the same vector space directly.
+
+  All three methods share the "added"/"removed" fallback logic in
   align_unmatched() - only the similarity function and thresholds differ.
 
 Threshold values (UNCHANGED_THRESHOLD / SEMANTIC_UNCHANGED_THRESHOLD) should
@@ -60,10 +68,29 @@ class ComparisonResult:
 UNCHANGED_THRESHOLD = 0.97
 MIN_MATCH_THRESHOLD = 0.35
 
-# --- Stage 3 (SBERT) thresholds ---------------------------------------------
+# --- Stage 3 (SBERT, English) thresholds ------------------------------------
 # Calibrated empirically via scripts/calibrate_threshold.py against gold-standard CSV.
 SEMANTIC_UNCHANGED_THRESHOLD = 0.9990
 SEMANTIC_MIN_MATCH_THRESHOLD = 0.55
+
+# --- Stage 3 (multilingual, cross-language) thresholds ----------------------
+# NOT yet calibrated against gold-standard annotations (no manually-annotated
+# multilingual corpus exists for this project) - these are placeholders
+# carried over from the English SBERT model's calibrated values as a starting
+# point. Cross-lingual similarity scores tend to run lower than same-language
+# scores even for a correct translation, so these almost certainly need their
+# own run of scripts/calibrate_threshold.py once real bilingual gold data
+# exists - do not treat "modified" classifications from this method as
+# dissertation-grade accuracy without doing that first.
+MULTILINGUAL_UNCHANGED_THRESHOLD = 0.92
+MULTILINGUAL_MIN_MATCH_THRESHOLD = 0.45
+
+# Methods that use a sentence-embedding model rather than difflib/TF-IDF,
+# mapped to the model key embeddings.py should load for them.
+_SEMANTIC_METHODS = {
+    "sbert": "sbert",
+    "multilingual": "multilingual",
+}
 
 
 def _text_similarity(a: str, b: str) -> float:
@@ -75,8 +102,9 @@ def compare_by_clause_number(
 ) -> tuple[list[ComparisonResult], list[ClauseRecord], list[ClauseRecord]]:
     """
     Stage 1: match by identical clause_number.
-    method="baseline" -> difflib character similarity.
-    method="sbert"    -> sentence-embedding cosine similarity (batched for speed).
+    method="baseline"     -> difflib character similarity.
+    method="sbert"         -> sentence-embedding cosine similarity, English model (batched).
+    method="multilingual" -> sentence-embedding cosine similarity, multilingual model (batched).
     """
     old_by_number = {c.clause_number: c for c in old_clauses}
     new_by_number = {c.clause_number: c for c in new_clauses}
@@ -87,20 +115,21 @@ def compare_by_clause_number(
 
     matched_results: list[ComparisonResult] = []
 
-    if method == "sbert":
+    if method in _SEMANTIC_METHODS:
+        model_key = _SEMANTIC_METHODS[method]
         try:
             from app.nlp.embeddings import paired_similarity
             old_texts = [old_by_number[n].text for n in matched_numbers]
             new_texts = [new_by_number[n].text for n in matched_numbers]
-            sims = paired_similarity(old_texts, new_texts)  # batched - one model call, not one per pair
-            threshold = SEMANTIC_UNCHANGED_THRESHOLD
-            method_label = "exact_number+sbert"
+            sims = paired_similarity(old_texts, new_texts, model_key=model_key)  # batched - one model call, not one per pair
+            threshold = MULTILINGUAL_UNCHANGED_THRESHOLD if method == "multilingual" else SEMANTIC_UNCHANGED_THRESHOLD
+            method_label = f"exact_number+{method}"
         except Exception as err:
             import warnings
-            warnings.warn(f"SBERT paired similarity failed ({err}); falling back to difflib.")
+            warnings.warn(f"{method} paired similarity failed ({err}); falling back to difflib.")
             sims = [_text_similarity(old_by_number[n].text, new_by_number[n].text) for n in matched_numbers]
             threshold = UNCHANGED_THRESHOLD
-            method_label = "exact_number+difflib (sbert fallback)"
+            method_label = f"exact_number+difflib ({method} fallback)"
     else:
         sims = [_text_similarity(old_by_number[n].text, new_by_number[n].text) for n in matched_numbers]
         threshold = UNCHANGED_THRESHOLD
@@ -123,35 +152,38 @@ def align_unmatched(
     """
     Stage 2: for clauses left over after exact-number matching (renumbering,
     additions, removals), find the best cross-match.
-    method="baseline" -> TF-IDF cosine similarity.
-    method="sbert"    -> sentence-embedding cosine similarity.
+    method="baseline"     -> TF-IDF cosine similarity.
+    method="sbert"         -> sentence-embedding cosine similarity, English model.
+    method="multilingual" -> sentence-embedding cosine similarity, multilingual model.
     """
     results: list[ComparisonResult] = []
-    method_label = "sbert (renumbered)" if method == "sbert" else "tfidf_cosine (renumbered)"
-    min_threshold = SEMANTIC_MIN_MATCH_THRESHOLD if method == "sbert" else MIN_MATCH_THRESHOLD
-    unchanged_threshold = SEMANTIC_UNCHANGED_THRESHOLD if method == "sbert" else UNCHANGED_THRESHOLD
-    no_candidate_label = "sbert" if method == "sbert" else "tfidf_cosine"
+    is_semantic = method in _SEMANTIC_METHODS
+    method_label = f"{method} (renumbered)" if is_semantic else "tfidf_cosine (renumbered)"
+    min_threshold = (MULTILINGUAL_MIN_MATCH_THRESHOLD if method == "multilingual" else SEMANTIC_MIN_MATCH_THRESHOLD) if is_semantic else MIN_MATCH_THRESHOLD
+    unchanged_threshold = (MULTILINGUAL_UNCHANGED_THRESHOLD if method == "multilingual" else SEMANTIC_UNCHANGED_THRESHOLD) if is_semantic else UNCHANGED_THRESHOLD
+    no_candidate_label = method if is_semantic else "tfidf_cosine"
 
     if not unmatched_old or not unmatched_new:
         results += [ComparisonResult("removed", c, None, 0.0, no_candidate_label) for c in unmatched_old]
         results += [ComparisonResult("added", None, c, 0.0, no_candidate_label) for c in unmatched_new]
         return results
 
-    if method == "sbert":
+    if is_semantic:
         try:
             from app.nlp.embeddings import semantic_similarity_matrix
             sim_matrix = semantic_similarity_matrix(
-                [c.text for c in unmatched_old], [c.text for c in unmatched_new]
+                [c.text for c in unmatched_old], [c.text for c in unmatched_new],
+                model_key=_SEMANTIC_METHODS[method],
             )
         except Exception as err:
             import warnings
-            warnings.warn(f"SBERT matrix calculation failed ({err}); falling back to TF-IDF.")
+            warnings.warn(f"{method} matrix calculation failed ({err}); falling back to TF-IDF.")
             corpus = [c.text for c in unmatched_old] + [c.text for c in unmatched_new]
             vectorizer = TfidfVectorizer(stop_words="english")
             tfidf = vectorizer.fit_transform(corpus)
             n_old = len(unmatched_old)
             sim_matrix = cosine_similarity(tfidf[:n_old], tfidf[n_old:])
-            method_label = "tfidf_cosine (sbert fallback)"
+            method_label = f"tfidf_cosine ({method} fallback)"
             min_threshold = MIN_MATCH_THRESHOLD
             unchanged_threshold = UNCHANGED_THRESHOLD
     else:

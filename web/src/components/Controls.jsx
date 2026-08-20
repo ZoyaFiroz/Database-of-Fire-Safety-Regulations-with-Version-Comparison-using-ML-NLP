@@ -85,8 +85,9 @@ export default function Controls({
         <div className="control-group">
           <label>NLP Model Pipeline</label>
           <select value={method} onChange={(e) => onMethodChange(e.target.value)}>
-            <option value="sbert">Stage 3: Sentence-BERT (all-MiniLM-L6-v2)</option>
             <option value="baseline">Baseline: difflib + TF-IDF</option>
+            <option value="sbert">Stage 3: Sentence-BERT (all-MiniLM-L6-v2, English)</option>
+            <option value="multilingual">Stage 3: Multilingual (cross-language, e.g. DE ↔ EN)</option>
           </select>
         </div>
       </div>
