@@ -65,6 +65,10 @@ def main():
     parser.add_argument("--gold", required=True, help="path to gold-annotated CSV")
     parser.add_argument("--skip-sbert", action="store_true",
                          help="only run the difflib sweep (use if sentence-transformers/model isn't available here)")
+    parser.add_argument("--model", choices=["sbert", "multilingual"], default="sbert",
+                         help="which embedding model to calibrate: 'sbert' (English, all-MiniLM-L6-v2) or "
+                              "'multilingual' (paraphrase-multilingual-MiniLM-L12-v2, for old/new versions in "
+                              "different languages) - see MULTILINGUAL_UNCHANGED_THRESHOLD in app/nlp/compare.py")
     args = parser.parse_args()
 
     with open(args.gold, encoding="utf-8") as f:
@@ -100,31 +104,32 @@ def main():
         print("Skipped SBERT sweep (--skip-sbert). Run without that flag once sentence-transformers works locally.")
         return
 
-    # --- SBERT sweep ---
+    # --- embedding-model sweep (sbert or multilingual) ---
+    model_label = "SBERT (all-MiniLM-L6-v2)" if args.model == "sbert" else "Multilingual (paraphrase-multilingual-MiniLM-L12-v2)"
+    target_const = "SEMANTIC_UNCHANGED_THRESHOLD" if args.model == "sbert" else "MULTILINGUAL_UNCHANGED_THRESHOLD"
     try:
         from app.nlp.embeddings import paired_similarity
-        sbert_sims = [float(s) for s in paired_similarity(old_texts, new_texts)]
+        model_sims = [float(s) for s in paired_similarity(old_texts, new_texts, model_key=args.model)]
     except Exception as e:
-        print(f"Could not compute SBERT similarities ({e}).")
+        print(f"Could not compute {model_label} similarities ({e}).")
         print("Make sure sentence-transformers is installed and you have internet access for the model download.")
         return
 
-    sbert_candidates = sorted(set(round(s, 4) for s in sbert_sims) | {0.90, 0.95, 0.97, 0.99, 0.995, 0.999})
-    sbert_results = sweep_thresholds(sbert_sims, labels, sbert_candidates)
-    best_sbert = max(sbert_results, key=lambda r: r["f1"])
+    model_candidates = sorted(set(round(s, 4) for s in model_sims) | {0.90, 0.95, 0.97, 0.99, 0.995, 0.999})
+    model_results = sweep_thresholds(model_sims, labels, model_candidates)
+    best_model = max(model_results, key=lambda r: r["f1"])
 
-    print("=== SBERT (all-MiniLM-L6-v2) ===")
-    print(f"Best threshold: {best_sbert['threshold']:.4f}  "
-          f"(precision={best_sbert['precision']:.2f}, recall={best_sbert['recall']:.2f}, f1={best_sbert['f1']:.2f})")
-    print(f"  TP={best_sbert['tp']} FP={best_sbert['fp']} FN={best_sbert['fn']} TN={best_sbert['tn']}\n")
+    print(f"=== {model_label} ===")
+    print(f"Best threshold: {best_model['threshold']:.4f}  "
+          f"(precision={best_model['precision']:.2f}, recall={best_model['recall']:.2f}, f1={best_model['f1']:.2f})")
+    print(f"  TP={best_model['tp']} FP={best_model['fp']} FN={best_model['fn']} TN={best_model['tn']}\n")
 
     print("=== Per-row comparison (sorted by gold label) ===")
-    print(f"{'old':>8}{'new':>8}{'gold':>12}{'difflib':>10}{'sbert':>10}")
-    for r, dsim, ssim in sorted(zip(usable, difflib_sims, sbert_sims), key=lambda x: x[0]["gold_change_type"]):
-        print(f"{r['old_clause_number']:>8}{r['new_clause_number']:>8}{r['gold_change_type']:>12}{dsim:>10.4f}{ssim:>10.4f}")
+    print(f"{'old':>8}{'new':>8}{'gold':>12}{'difflib':>10}{args.model:>14}")
+    for r, dsim, msim in sorted(zip(usable, difflib_sims, model_sims), key=lambda x: x[0]["gold_change_type"]):
+        print(f"{r['old_clause_number']:>8}{r['new_clause_number']:>8}{r['gold_change_type']:>12}{dsim:>10.4f}{msim:>14.4f}")
 
-    print(f"\nUpdate SEMANTIC_UNCHANGED_THRESHOLD in app/nlp/compare.py to {best_sbert['threshold']:.4f} "
-          f"(currently a placeholder of 0.995) based on this result.")
+    print(f"\nUpdate {target_const} in app/nlp/compare.py to {best_model['threshold']:.4f} based on this result.")
 
 
 if __name__ == "__main__":

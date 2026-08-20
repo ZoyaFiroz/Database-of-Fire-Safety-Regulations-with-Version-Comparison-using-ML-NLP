@@ -127,3 +127,37 @@ data/
    highlighting, calling the `/compare/{old}/{new}` endpoint.
 6. **Extend to Volume 2** and/or BS documents as a stretch goal, using the
    `jurisdiction` field already in the schema for the multi-country angle.
+   Done — Volume 2 (Buildings other than dwellings) is ingested as a second
+   `Document`; see `app/ingestion/clause_parser.py` for the fix that made the
+   Appendix-boundary detection work for documents with a different section
+   count than Volume 1.
+
+## Cross-language comparison (Stage 3, multilingual)
+
+A third comparison method, `method=multilingual`, lets the old and new
+versions be in *different* languages (e.g. a German edition compared against
+an English one) with no separate translation step: `app/nlp/embeddings.py`
+adds `paraphrase-multilingual-MiniLM-L12-v2`, a sentence-embedding model
+trained across ~50 languages into one shared vector space, so semantically
+equivalent clauses in different languages land close together regardless of
+lexical overlap.
+
+Try it without ingesting any foreign-language document:
+```bash
+python scripts/demo_multilingual.py
+```
+This runs a handful of real EN/DE fire-safety clause pairs (an exact
+translation, a translation with one substantive edit, and two unrelated
+sentences) through the multilingual model and prints the similarity scores,
+so you can see it correctly separates "same meaning, different language"
+from "actually changed" from "unrelated" — without any German document
+having been ingested into the database yet.
+
+**Not yet calibrated**: `MULTILINGUAL_UNCHANGED_THRESHOLD` in
+`app/nlp/compare.py` is a documented placeholder, not an empirically-derived
+value — there's no gold-standard multilingual annotation set to calibrate
+against yet (mirrors exactly the situation `SEMANTIC_UNCHANGED_THRESHOLD` was
+in before Stage 3 was calibrated for English). Before citing multilingual
+accuracy numbers in the dissertation, ingest a real bilingual document pair
+and run `scripts/calibrate_threshold.py` against it, same as was done for the
+English pipeline.

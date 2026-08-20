@@ -22,7 +22,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
 from app.db.models import Base, Document, DocumentVersion, Clause
-from app.nlp.compare import compare_versions, summarize, ClauseRecord, SEMANTIC_UNCHANGED_THRESHOLD, UNCHANGED_THRESHOLD
+from app.nlp.compare import (
+    compare_versions, summarize, ClauseRecord,
+    SEMANTIC_UNCHANGED_THRESHOLD, MULTILINGUAL_UNCHANGED_THRESHOLD, UNCHANGED_THRESHOLD,
+)
 from app.api.dashboard import DASHBOARD_HTML
 
 DATABASE_URL = "sqlite:///./fire_regs.db"
@@ -114,15 +117,25 @@ def list_clauses(version_id: int, db: Session = Depends(get_db)):
 _compare_cache: dict[tuple[int, int, str], dict] = {}
 
 
+def _active_threshold(method: str, has_fallback: bool) -> float:
+    if has_fallback:
+        return UNCHANGED_THRESHOLD
+    if method == "sbert":
+        return SEMANTIC_UNCHANGED_THRESHOLD
+    if method == "multilingual":
+        return MULTILINGUAL_UNCHANGED_THRESHOLD
+    return UNCHANGED_THRESHOLD
+
+
 @app.get("/compare/{old_version_id}/{new_version_id}")
 def compare(
     old_version_id: int,
     new_version_id: int,
-    method: str = Query("baseline", description="Comparison pipeline method: 'baseline' (difflib+TFIDF, fast) or 'sbert' (Sentence-BERT, slower but semantic)"),
+    method: str = Query("baseline", description="Comparison pipeline method: 'baseline' (difflib+TFIDF, fast), 'sbert' (Sentence-BERT, English, semantic), or 'multilingual' (cross-language semantic, e.g. German vs English)"),
     db: Session = Depends(get_db)
 ):
-    if method not in ("baseline", "sbert"):
-        raise HTTPException(400, "Method must be 'baseline' or 'sbert'")
+    if method not in ("baseline", "sbert", "multilingual"):
+        raise HTTPException(400, "Method must be 'baseline', 'sbert', or 'multilingual'")
 
     cache_key = (old_version_id, new_version_id, method)
     if cache_key in _compare_cache:
@@ -148,7 +161,7 @@ def compare(
     response_data = {
         "summary": summarize(results),
         "method": active_method,
-        "active_threshold": SEMANTIC_UNCHANGED_THRESHOLD if (method == "sbert" and not has_fallback) else UNCHANGED_THRESHOLD,
+        "active_threshold": _active_threshold(method, has_fallback),
         "changes": [
             {
                 "change_type": r.change_type,
@@ -177,6 +190,9 @@ def compare(
 def calibration_info():
     return {
         "sbert_model": "all-MiniLM-L6-v2",
+        "multilingual_model": "paraphrase-multilingual-MiniLM-L12-v2",
         "semantic_unchanged_threshold": SEMANTIC_UNCHANGED_THRESHOLD,
+        "multilingual_unchanged_threshold": MULTILINGUAL_UNCHANGED_THRESHOLD,
+        "multilingual_threshold_calibrated": False,
         "baseline_unchanged_threshold": UNCHANGED_THRESHOLD,
     }
