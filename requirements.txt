@@ -1,0 +1,10 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+sqlalchemy==2.0.35
+pdfplumber==0.11.4
+scikit-learn==1.5.2
+python-multipart==0.0.9
+
+# Stage 3 - semantic clause matching with Sentence-BERT embeddings. Required:
+# the API, dashboard, and calibrate_threshold.py all use this by default.
+sentence-transformers==5.7.0
