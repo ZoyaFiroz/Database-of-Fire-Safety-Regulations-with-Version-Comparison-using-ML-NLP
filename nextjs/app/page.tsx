@@ -1,126 +1,92 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
-import { listClauses, listDocuments, listVersions } from "@/lib/api";
-import type { VersionSummary } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/AuthProvider";
 
-interface VersionWithCount extends VersionSummary {
-  clauseCount: number;
-}
+const WORKFLOWS = [
+  {
+    href: "/regulations",
+    icon: "🛡️",
+    accent: "teal" as const,
+    title: "UK Safety Regulation Comparison",
+    description:
+      "Structured, clause-level comparison across ingested versions of Approved Document B - fixed schema, clause-by-clause diffing.",
+    cta: "Open UK Fire Safety workflow",
+  },
+  {
+    href: "/general-compare",
+    icon: "🔗",
+    accent: "gold" as const,
+    title: "Custom Document Comparison",
+    description:
+      "Upload any two documents and get a plain-language, AI-synthesized comparison with a single similarity score - no fixed schema required.",
+    cta: "Open Custom Compare workflow",
+  },
+];
 
-async function loadDocuments() {
-  const documents = await listDocuments();
-  const withVersions = await Promise.all(
-    documents.map(async (doc) => {
-      const versions = await listVersions(doc.id);
-      const versionsWithCounts: VersionWithCount[] = await Promise.all(
-        versions.map(async (v) => {
-          const clauses = await listClauses(v.id);
-          return { ...v, clauseCount: clauses.length };
-        })
-      );
-      versionsWithCounts.sort((a, b) => a.id - b.id);
-      return { ...doc, versions: versionsWithCounts };
-    })
-  );
-  return withVersions;
-}
+export default function DashboardHubPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
 
-function buildPresets(versions: VersionWithCount[]) {
-  const presets: { oldId: number; newId: number; label: string }[] = [];
-  for (let i = 0; i < versions.length - 1; i++) {
-    presets.push({
-      oldId: versions[i].id,
-      newId: versions[i + 1].id,
-      label: `${versions[i].label} → ${versions[i + 1].label}`,
-    });
-  }
-  return presets;
-}
+  useEffect(() => {
+    if (!loading && !user) router.push("/login");
+  }, [loading, user, router]);
 
-export default async function DashboardPage() {
-  let documents: Awaited<ReturnType<typeof loadDocuments>> = [];
-  let error: string | null = null;
-  try {
-    documents = await loadDocuments();
-  } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
+  if (loading || !user) {
+    return <main className="mx-auto max-w-4xl px-4 py-10 text-gray-400">Loading…</main>;
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Regulation Documents</h1>
-      <p className="mt-2 max-w-2xl text-sm text-gray-400">
-        Select a document below to see its ingested versions and run a clause-level comparison
-        between any two editions.
-      </p>
+    <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
+      <div className="text-center">
+        <span className="inline-block rounded-full border border-brand-teal/30 bg-brand-teal/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-brand-goldLight">
+          Welcome back
+        </span>
+        <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
+          {user.email.split("@")[0]}, choose a comparison workflow
+        </h1>
+        <p className="mx-auto mt-3 max-w-xl text-sm text-gray-400">
+          Veritext runs two distinct comparison engines - pick the one that fits the documents
+          you're working with.
+        </p>
+      </div>
 
-      {error && (
-        <div className="mt-8 rounded-2xl border border-removed/30 bg-removed/10 p-6 text-removed">
-          Failed to load documents from the API: {error}
-          <div className="mt-1 text-xs text-gray-400">
-            Is the FastAPI backend running at {process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}?
-          </div>
-        </div>
-      )}
-
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {documents.map((doc) => {
-          const presets = buildPresets(doc.versions);
-          const totalClauses = doc.versions.reduce((sum, v) => sum + v.clauseCount, 0);
+      <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2">
+        {WORKFLOWS.map((w) => {
+          const isTeal = w.accent === "teal";
           return (
-            <div
-              key={doc.id}
-              className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-md"
+            <Link
+              key={w.href}
+              href={w.href}
+              className={`group flex flex-col rounded-3xl border p-7 backdrop-blur-md transition ${
+                isTeal
+                  ? "border-brand-teal/25 bg-gradient-to-b from-brand-teal/10 to-white/[0.02] hover:border-brand-teal/50 hover:shadow-[0_0_50px_-20px_rgba(20,184,166,0.5)]"
+                  : "border-brand-gold/25 bg-gradient-to-b from-brand-gold/10 to-white/[0.02] hover:border-brand-gold/50 hover:shadow-[0_0_50px_-20px_rgba(212,175,55,0.5)]"
+              }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <h2 className="text-lg font-semibold">{doc.title}</h2>
-                <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-gray-400">
-                  {doc.jurisdiction}
-                </span>
+              <div
+                className={`flex h-14 w-14 items-center justify-center rounded-2xl text-2xl ${
+                  isTeal ? "bg-brand-teal/20" : "bg-brand-gold/20"
+                }`}
+              >
+                {w.icon}
               </div>
-
-              <div className="mt-4 flex gap-4 text-sm text-gray-400">
-                <div>
-                  <span className="font-semibold text-white">{doc.versions.length}</span> versions
-                </div>
-                <div>
-                  <span className="font-semibold text-white">{totalClauses}</span> total clauses ingested
-                </div>
-              </div>
-
-              <ul className="mt-4 space-y-1.5 text-sm">
-                {doc.versions.map((v) => (
-                  <li key={v.id} className="flex items-center justify-between text-gray-300">
-                    <span>
-                      {v.label} <span className="text-gray-500">(v{v.id})</span>
-                    </span>
-                    <span className="text-gray-500">{v.clauseCount} clauses · {v.page_count ?? "?"} pages</span>
-                  </li>
-                ))}
-              </ul>
-
-              {presets.length > 0 ? (
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {presets.map((p) => (
-                    <Link
-                      key={`${p.oldId}-${p.newId}`}
-                      href={`/compare/${p.oldId}/${p.newId}`}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-200 transition hover:border-accent-indigo/40 hover:bg-accent-indigo/20 hover:text-white"
-                    >
-                      Compare {p.label} →
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-5 text-xs text-gray-500">Need at least two versions to compare.</p>
-              )}
-            </div>
+              <h2 className="mt-5 text-xl font-bold text-white">{w.title}</h2>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-400">{w.description}</p>
+              <span
+                className={`mt-6 inline-flex items-center gap-2 text-sm font-semibold ${
+                  isTeal ? "text-brand-teal" : "text-brand-goldLight"
+                }`}
+              >
+                {w.cta}
+                <span className="transition group-hover:translate-x-1">→</span>
+              </span>
+            </Link>
           );
         })}
       </div>
-
-      {!error && documents.length === 0 && (
-        <p className="mt-8 text-sm text-gray-400">No documents ingested yet.</p>
-      )}
     </main>
   );
 }

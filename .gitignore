@@ -2,7 +2,20 @@ venv/
 __pycache__/
 *.pyc
 Data/*.pdf
+# Exception: these 5 are the actual source regulations the app is built
+# around (UK Approved Document B, Crown copyright under the Open Government
+# Licence - redistribution is permitted) and the deployed backend's Docker
+# image bakes its seed database from them at build time - see Dockerfile.
+!Data/Approved_Document_B__fire_safety__volume_1_-_Dwellings__2019_edition.pdf
+!Data/Approved_Document_B__fire_safety__volume_1_Dwellings__2019_edition_incorporating_2020_amendments.pdf
+!Data/Approved_Document_B__fire_safety__volume_1_-_Dwellings__2019_edition_incorporating_2020_and_2022_amendments.pdf
+!Data/Approved_Document_B__fire_safety__volume_2_-_Buildings_other_than_dwellings__2019_edition.pdf
+!Data/Approved_Document_B__fire_safety__volume_2_-_Buildings_other_than_dwellings__2019_edition_incorporating_2020_and_2022_amendments.pdf
 Data/samples/
 *.db
 .DS_Store
 .claude/launch.json
+.env
+.env.*
+!.env.example
+tessdata/

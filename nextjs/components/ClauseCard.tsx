@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import type { ComparisonChange } from "@/lib/types";
+import type { ClauseNote, ComparisonChange } from "@/lib/types";
 import { highlightDiff, type DiffRun } from "@/lib/diff";
+import ClauseNoteEditor from "./ClauseNoteEditor";
+import { useAuth } from "./AuthProvider";
 
 const BADGE_CLASSES: Record<string, string> = {
   modified: "bg-modified/15 text-modified border-modified/30",
@@ -37,10 +39,15 @@ function DiffPane({ label, text, runs, mark, empty }: { label: string; text: str
 export default function ClauseCard({
   result,
   detailHref,
+  note,
+  onSaveNote,
 }: {
   result: ComparisonChange;
   detailHref: string;
+  note?: ClauseNote;
+  onSaveNote?: (text: string) => Promise<void>;
 }) {
+  const { user } = useAuth();
   const num = result.old_clause_number || result.new_clause_number || "N/A";
   const simPct = (result.similarity * 100).toFixed(1) + "%";
   const { oldRuns, newRuns } = highlightDiff(result.old_text, result.new_text);
@@ -74,6 +81,7 @@ export default function ClauseCard({
         <DiffPane label="Version A (Base)" text={result.old_text} runs={oldRuns} mark="diff-del" empty="Clause not present in Version A" />
         <DiffPane label="Version B (Comparison)" text={result.new_text} runs={newRuns} mark="diff-add" empty="Clause not present in Version B" />
       </div>
+      {user && onSaveNote && <ClauseNoteEditor note={note} onSave={onSaveNote} />}
     </div>
   );
 }

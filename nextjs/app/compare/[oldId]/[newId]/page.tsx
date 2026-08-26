@@ -10,8 +10,14 @@ import SimilarityHistogram from "@/components/SimilarityHistogram";
 import FilterBar from "@/components/FilterBar";
 import ClauseCard from "@/components/ClauseCard";
 import ExportButtons from "@/components/ExportButtons";
-import { compareVersions, listDocuments, listVersions } from "@/lib/api";
-import type { ChangeType, ComparisonResponse, Method, VersionSummary } from "@/lib/types";
+import SaveComparisonButton from "@/components/SaveComparisonButton";
+import { useAuth } from "@/components/AuthProvider";
+import { compareVersions, listClauseNotes, listDocuments, listVersions, upsertClauseNote } from "@/lib/api";
+import type { ChangeType, ClauseNote, ComparisonResponse, Method, VersionSummary } from "@/lib/types";
+
+function noteKey(oldNum: string | null, newNum: string | null) {
+  return `${oldNum || ""}|${newNum || ""}`;
+}
 
 export default function ComparePage() {
   const params = useParams<{ oldId: string; newId: string }>();
@@ -29,6 +35,8 @@ export default function ComparePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<ChangeType | "all">("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const { user } = useAuth();
+  const [notes, setNotes] = useState<Record<string, ClauseNote>>({});
 
   // Find which document these version ids belong to, so Controls can offer
   // its sibling versions in the selectors.
@@ -73,6 +81,38 @@ export default function ComparePage() {
     return () => controller.abort();
   }, [oldVersionId, newVersionId, method]);
 
+  // Fetch this comparison's notes once (not per-card) - avoids 381 separate
+  // requests for a full document comparison.
+  useEffect(() => {
+    if (!user || !oldVersionId || !newVersionId) {
+      setNotes({});
+      return;
+    }
+    const controller = new AbortController();
+    listClauseNotes(oldVersionId, newVersionId, method, controller.signal)
+      .then((rows) => {
+        const map: Record<string, ClauseNote> = {};
+        for (const n of rows) map[noteKey(n.old_clause_number, n.new_clause_number)] = n;
+        setNotes(map);
+      })
+      .catch(() => {
+        // notes are a non-critical enhancement - fail silently
+      });
+    return () => controller.abort();
+  }, [user, oldVersionId, newVersionId, method]);
+
+  async function handleSaveNote(oldNum: string | null, newNum: string | null, text: string) {
+    const saved = await upsertClauseNote({
+      oldVersionId,
+      newVersionId,
+      method,
+      oldClauseNumber: oldNum,
+      newClauseNumber: newNum,
+      noteText: text,
+    });
+    setNotes((prev) => ({ ...prev, [noteKey(oldNum, newNum)]: saved }));
+  }
+
   const filteredResults = useMemo(() => {
     if (!compareData?.changes) return [];
     const term = searchTerm.toLowerCase().trim();
@@ -98,10 +138,35 @@ export default function ComparePage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
       <div className="no-print mb-6 flex items-center justify-between gap-3">
-        <Link href="/" className="text-sm text-gray-400 hover:text-white">
+        <Link href="/regulations" className="text-sm text-gray-400 hover:text-white">
           ← Documents
         </Link>
-        <ExportButtons changes={filteredResults} filenameBase={`comparison-${oldVersionId}-vs-${newVersionId}-${method}`} />
+        <div className="flex flex-wrap items-center gap-3">
+          <SaveComparisonButton oldVersionId={oldVersionId} newVersionId={newVersionId} method={method} />
+          <ExportButtons
+            changes={filteredResults}
+            filenameBase={`comparison-${oldVersionId}-vs-${newVersionId}-${method}`}
+            oldVersionId={oldVersionId}
+            newVersionId={newVersionId}
+            method={method}
+            activeFilter={activeFilter}
+            searchTerm={searchTerm}
+          />
+        </div>
+      </div>
+
+      <div className="no-print mb-6 flex items-center gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-brand-teal/30 bg-brand-teal/15 text-lg">
+          🛡️
+        </div>
+        <div>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+            UK Safety Regulation — Compare View
+          </h1>
+          <p className="text-sm text-gray-400">
+            {documentTitle || "Clause-level comparison"} · fixed clause schema
+          </p>
+        </div>
       </div>
 
       <Controls
@@ -173,11 +238,14 @@ export default function ComparePage() {
             )}?method=${method}&old=${encodeURIComponent(r.old_clause_number || "")}&new=${encodeURIComponent(
               r.new_clause_number || ""
             )}`;
+            const key = noteKey(r.old_clause_number, r.new_clause_number);
             return (
               <ClauseCard
                 key={`${r.old_clause_number || "-"}-${r.new_clause_number || "-"}-${r.method}`}
                 result={r}
                 detailHref={detailHref}
+                note={notes[key]}
+                onSaveNote={(text) => handleSaveNote(r.old_clause_number, r.new_clause_number, text)}
               />
             );
           })}

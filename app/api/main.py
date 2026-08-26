@@ -18,21 +18,18 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
 
-from app.db.models import Base, Document, DocumentVersion, Clause
+from app.db.models import Document, DocumentVersion, Clause
+from app.db.session import get_db
 from app.nlp.compare import (
     compare_versions, summarize, ClauseRecord,
     SEMANTIC_UNCHANGED_THRESHOLD, MULTILINGUAL_UNCHANGED_THRESHOLD, UNCHANGED_THRESHOLD,
 )
 from app.api.dashboard import DASHBOARD_HTML
-
-DATABASE_URL = "sqlite:///./fire_regs.db"
-
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(bind=engine)
-Base.metadata.create_all(engine)
+from app.api.auth_routes import router as auth_router
+from app.api.user_data_routes import router as user_data_router
+from app.api.general_routes import router as general_router
 
 app = FastAPI(
     title="Fire Safety Regulations Version Comparison API",
@@ -49,13 +46,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+app.include_router(auth_router)
+app.include_router(user_data_router)
+app.include_router(general_router)
 
 
 @app.get("/", response_class=HTMLResponse)

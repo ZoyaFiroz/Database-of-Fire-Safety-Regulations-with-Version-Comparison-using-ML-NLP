@@ -102,3 +102,74 @@ class ClauseMapping(Base):
     source = Column(String(20), default="automated")          # "automated" | "manual" (for gold-standard annotation)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class User(Base):
+    """A registered account on the Next.js frontend (login/signup)."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), nullable=False, unique=True)
+    hashed_password = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    saved_comparisons = relationship("SavedComparison", back_populates="user", cascade="all, delete-orphan")
+    clause_notes = relationship("ClauseNote", back_populates="user", cascade="all, delete-orphan")
+    export_records = relationship("ExportRecord", back_populates="user", cascade="all, delete-orphan")
+
+
+class SavedComparison(Base):
+    """A version-pair + method a user bookmarked to revisit later."""
+    __tablename__ = "saved_comparisons"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    old_version_id = Column(Integer, ForeignKey("document_versions.id"), nullable=False)
+    new_version_id = Column(Integer, ForeignKey("document_versions.id"), nullable=False)
+    method = Column(String(20), nullable=False)               # "baseline" | "sbert" | "multilingual"
+    label = Column(String(255))                                 # optional user-given title, e.g. "For Ch.3 draft"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="saved_comparisons")
+
+
+class ClauseNote(Base):
+    """A user's free-text note on one clause result within one comparison."""
+    __tablename__ = "clause_notes"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    old_version_id = Column(Integer, ForeignKey("document_versions.id"), nullable=False)
+    new_version_id = Column(Integer, ForeignKey("document_versions.id"), nullable=False)
+    method = Column(String(20), nullable=False)
+    old_clause_number = Column(String(30))                      # nullable - clause may be "added" (no old side)
+    new_clause_number = Column(String(30))                      # nullable - clause may be "removed" (no new side)
+    note_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="clause_notes")
+
+
+class ExportRecord(Base):
+    """
+    Log of a user's past CSV/PDF exports. For CSV, csv_content is stored so
+    it can be re-downloaded verbatim without re-running the comparison. PDF
+    exports happen entirely client-side via the browser's print dialog, so
+    there's no file to store server-side - this just logs what was exported
+    and links back to the same comparison to re-open it.
+    """
+    __tablename__ = "export_records"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    old_version_id = Column(Integer, ForeignKey("document_versions.id"), nullable=False)
+    new_version_id = Column(Integer, ForeignKey("document_versions.id"), nullable=False)
+    method = Column(String(20), nullable=False)
+    export_type = Column(String(10), nullable=False)            # "csv" | "pdf"
+    filter_change_type = Column(String(20))                      # the active filter tab at export time, if any
+    search_term = Column(String(255))                            # the active search text at export time, if any
+    csv_content = Column(Text)                                    # only populated when export_type == "csv"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="export_records")

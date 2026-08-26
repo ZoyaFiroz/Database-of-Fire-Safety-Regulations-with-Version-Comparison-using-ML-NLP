@@ -1,7 +1,13 @@
 "use client";
 
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import type { ComparisonSummary } from "@/lib/types";
+
+interface Counts {
+  unchanged: number;
+  modified?: number;
+  added: number;
+  removed: number;
+}
 
 const COLORS: Record<string, string> = {
   Unchanged: "#6b7280",
@@ -10,11 +16,11 @@ const COLORS: Record<string, string> = {
   Removed: "#ef4444",
 };
 
-export default function ChangeTypeChart({ summary }: { summary?: ComparisonSummary }) {
+export default function ChangeTypeChart({ summary }: { summary?: Counts }) {
   const s = summary || { unchanged: 0, modified: 0, added: 0, removed: 0 };
   const data = [
     { name: "Unchanged", value: s.unchanged },
-    { name: "Modified", value: s.modified },
+    { name: "Modified", value: s.modified || 0 },
     { name: "Added", value: s.added },
     { name: "Removed", value: s.removed },
   ].filter((d) => d.value > 0);

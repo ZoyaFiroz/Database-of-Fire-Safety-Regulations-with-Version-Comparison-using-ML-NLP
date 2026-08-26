@@ -4,7 +4,29 @@ sqlalchemy==2.0.35
 pdfplumber==0.11.4
 scikit-learn==1.5.2
 python-multipart==0.0.9
+python-dotenv==1.2.3
+
+# OCR fallback for scanned/image-only PDF pages (app/ingestion/generic_extractor.py).
+# Needs the Tesseract OCR engine installed on the host separately - see
+# .env.example for TESSERACT_CMD/TESSDATA_PREFIX/OCR_LANGUAGES. On Debian/Ubuntu
+# (e.g. a Docker deploy): apt-get install tesseract-ocr tesseract-ocr-spa
+pytesseract==0.3.13
 
 # Stage 3 - semantic clause matching with Sentence-BERT embeddings. Required:
 # the API, dashboard, and calibrate_threshold.py all use this by default.
 sentence-transformers==5.7.0
+
+# Auth (Next.js login/signup pages) - password hashing, JWT, and email validation.
+bcrypt==5.0.0
+pyjwt==2.13.0
+pydantic[email]==2.13.4
+
+# General Document Comparison feature (app/nlp/summarizer.py) - abstractive
+# summarization of detected changes. torch/transformers are already pulled
+# in transitively by sentence-transformers above; listed explicitly here so
+# this feature doesn't silently break if that changes. google-genai is the
+# free-tier primary path (requires GEMINI_API_KEY env var to activate) with
+# transformers/torch as the automatic zero-config local fallback.
+transformers==5.15.0
+torch==2.13.0
+google-genai==2.20.0

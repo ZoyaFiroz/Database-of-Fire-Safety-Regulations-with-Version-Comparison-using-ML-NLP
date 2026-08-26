@@ -1,21 +1,37 @@
-import type { ComparisonSummary } from "@/lib/types";
+interface Counts {
+  unchanged: number;
+  modified?: number;
+  added: number;
+  removed: number;
+}
 
-const CARDS: { key: keyof ComparisonSummary | "total"; label: string; accent: string }[] = [
-  { key: "total", label: "Total Clauses Evaluated", accent: "bg-accent-indigo" },
-  { key: "modified", label: "Modified Clauses", accent: "bg-modified" },
-  { key: "added", label: "Added Clauses", accent: "bg-added" },
-  { key: "removed", label: "Removed Clauses", accent: "bg-removed" },
-  { key: "unchanged", label: "Unchanged Clauses", accent: "bg-unchanged" },
-];
+function buildCards(itemLabel: string) {
+  return [
+    { key: "total", label: `Total ${itemLabel} Evaluated`, accent: "bg-accent-indigo" },
+    { key: "modified", label: `Modified ${itemLabel}`, accent: "bg-modified" },
+    { key: "added", label: `Added ${itemLabel}`, accent: "bg-added" },
+    { key: "removed", label: `Removed ${itemLabel}`, accent: "bg-removed" },
+    { key: "unchanged", label: `Unchanged ${itemLabel}`, accent: "bg-unchanged" },
+  ] as const;
+}
 
-export default function StatsGrid({ summary }: { summary?: ComparisonSummary }) {
+export default function StatsGrid({
+  summary,
+  itemLabel = "Clauses",
+  hideKeys = [],
+}: {
+  summary?: Counts;
+  itemLabel?: string;
+  hideKeys?: string[];
+}) {
   const s = summary || { unchanged: 0, modified: 0, added: 0, removed: 0 };
-  const total = s.unchanged + s.modified + s.added + s.removed;
+  const total = s.unchanged + (s.modified || 0) + s.added + s.removed;
   const values: Record<string, number> = { total, ...s };
+  const cards = buildCards(itemLabel).filter((c) => !hideKeys.includes(c.key));
 
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      {CARDS.map((c) => (
+      {cards.map((c) => (
         <div
           key={c.key}
           className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-md"

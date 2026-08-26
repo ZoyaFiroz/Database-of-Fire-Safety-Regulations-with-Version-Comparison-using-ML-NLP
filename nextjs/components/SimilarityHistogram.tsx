@@ -1,11 +1,16 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { ComparisonChange } from "@/lib/types";
+import type { ChangeType } from "@/lib/types";
 
 const BUCKET_COUNT = 10;
 
-export default function SimilarityHistogram({ changes }: { changes: ComparisonChange[] }) {
+interface ScoredChange {
+  change_type: ChangeType;
+  similarity: number;
+}
+
+export default function SimilarityHistogram({ changes }: { changes: ScoredChange[] }) {
   // Only "unchanged"/"modified" rows have a meaningful paired similarity score -
   // "added"/"removed" are always ~0 by construction and would just spike the
   // first bucket without telling you anything about match confidence.
@@ -43,7 +48,7 @@ export default function SimilarityHistogram({ changes }: { changes: ComparisonCh
         />
         <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} allowDecimals={false} />
         <Tooltip
-          cursor={{ fill: "rgba(99,102,241,0.1)" }}
+          cursor={{ fill: "rgba(20,184,166,0.1)" }}
           contentStyle={{
             background: "#0f172acc",
             border: "1px solid rgba(255,255,255,0.1)",
@@ -51,7 +56,7 @@ export default function SimilarityHistogram({ changes }: { changes: ComparisonCh
             color: "#f3f4f6",
           }}
         />
-        <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="count" fill="#14b8a6" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
