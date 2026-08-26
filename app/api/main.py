@@ -4,9 +4,10 @@ FastAPI app for the Fire Safety Regulations Version-Comparison project.
 Run locally with:
     python -m uvicorn app.api.main:app --reload
 
+The UI lives in nextjs/ (deployed separately) - this service is API-only.
+
 Endpoints:
-    GET  /                                         Interactive Web UI Dashboard (or API root JSON)
-    GET  /ui                                       Interactive Web UI Dashboard
+    GET  /                                         API root info (JSON)
     GET  /docs                                     Interactive Swagger API Documentation
     GET  /documents                                List regulations
     GET  /documents/{id}/versions                  List versions of a regulation
@@ -15,8 +16,8 @@ Endpoints:
 """
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Depends, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -26,7 +27,6 @@ from app.nlp.compare import (
     compare_versions, summarize, ClauseRecord,
     SEMANTIC_UNCHANGED_THRESHOLD, MULTILINGUAL_UNCHANGED_THRESHOLD, UNCHANGED_THRESHOLD,
 )
-from app.api.dashboard import DASHBOARD_HTML
 from app.api.auth_routes import router as auth_router
 from app.api.user_data_routes import router as user_data_router
 from app.api.general_routes import router as general_router
@@ -51,18 +51,12 @@ app.include_router(user_data_router)
 app.include_router(general_router)
 
 
-@app.get("/", response_class=HTMLResponse)
-def root(request: Request):
-    # If request accepts HTML (browser), serve the UI dashboard; otherwise JSON API root info
-    accept = request.headers.get("accept", "")
-    if "text/html" in accept:
-        return HTMLResponse(content=DASHBOARD_HTML)
+@app.get("/")
+def root():
     return JSONResponse(content={
         "message": "Fire Safety Regulations Version Comparison API is running",
-        "ui_url": "/ui",
         "documentation_url": "/docs",
         "endpoints": [
-            "GET /ui (Interactive Visual Dashboard)",
             "GET /docs (Interactive Swagger UI)",
             "GET /documents (List all documents)",
             "GET /documents/{id}/versions (List document versions)",
@@ -70,11 +64,6 @@ def root(request: Request):
             "GET /compare/{old_version_id}/{new_version_id}?method=sbert (Run live comparison)",
         ],
     })
-
-
-@app.get("/ui", response_class=HTMLResponse)
-def ui_dashboard():
-    return HTMLResponse(content=DASHBOARD_HTML)
 
 
 @app.get("/documents")
