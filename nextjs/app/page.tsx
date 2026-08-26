@@ -49,7 +49,7 @@ export default function DashboardHubPage() {
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-sm text-gray-400">
           Veritext runs two distinct comparison engines - pick the one that fits the documents
-          you're working with.
+          you&apos;re working with.
         </p>
       </div>
 

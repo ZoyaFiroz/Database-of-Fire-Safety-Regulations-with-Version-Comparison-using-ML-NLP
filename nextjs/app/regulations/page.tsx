@@ -2,6 +2,13 @@ import Link from "next/link";
 import { listClauses, listDocuments, listVersions } from "@/lib/api";
 import type { VersionSummary } from "@/lib/types";
 
+// This page fetches from the backend on every load (regulation counts can
+// change as new versions are ingested) and must never be attempted at build
+// time - without this, `next build` tries to prerender it and hangs/fails
+// if the backend isn't reachable during the build step (as it may not be on
+// a host like Vercel, where the frontend and backend build independently).
+export const dynamic = "force-dynamic";
+
 interface VersionWithCount extends VersionSummary {
   clauseCount: number;
 }
