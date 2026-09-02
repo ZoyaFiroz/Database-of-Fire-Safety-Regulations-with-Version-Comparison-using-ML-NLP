@@ -37,11 +37,20 @@ TokenResponse.model_rebuild()
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
-    existing = db.query(User).filter_by(email=body.email).first()
+    # Emails are stored and looked up in lowercase throughout this module.
+    # Without this, "Name@Example.com" at registration and "name@example.com"
+    # at login are treated as two different accounts by SQLite's default
+    # case-sensitive TEXT comparison - login then fails with the generic
+    # "Incorrect email or password" message even though the password typed
+    # was correct, since the row is never found in the first place. Almost
+    # every real mail provider treats the local part case-insensitively, so
+    # normalising here matches user expectation, not just convenience.
+    normalized_email = body.email.lower()
+    existing = db.query(User).filter_by(email=normalized_email).first()
     if existing is not None:
         raise HTTPException(409, "An account with this email already exists")
 
-    user = User(email=body.email, hashed_password=hash_password(body.password))
+    user = User(email=normalized_email, hashed_password=hash_password(body.password))
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -52,7 +61,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter_by(email=body.email).first()
+    user = db.query(User).filter_by(email=body.email.lower()).first()
     if user is None or not verify_password(body.password, user.hashed_password):
         raise HTTPException(401, "Incorrect email or password")
 
